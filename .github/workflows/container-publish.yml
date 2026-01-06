@@ -1,0 +1,44 @@
+name: Docker
+
+on:
+  push:
+    tags:
+      - '*'
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get Alpine Tag
+        id: getalpinetag
+        run: echo "alpinetag=$(grep FROM Dockerfile | cut -d' ' -f2 | tr -d ':')" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log into registry ${{ env.REGISTRY }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        id: container-build-and-push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64/v8
+          tags: ${{ env.REGISTRY }}/${{ github.repository }}:${{ github.ref_name }}-${{ steps.getalpinetag.outputs.alpinetag }}, ${{ env.REGISTRY }}/${{ github.repository }}:${{ github.ref_name }}-alpine, ${{ env.REGISTRY }}/${{ github.repository }}:${{ github.ref_name }}, ${{ env.REGISTRY }}/${{ github.repository }}:alpine, ${{ env.REGISTRY }}/${{ github.repository }}:latest
+        
