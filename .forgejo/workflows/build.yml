@@ -65,7 +65,7 @@ jobs:
         run: |
           REGISTRY=$(echo "${{ github.server_url }}" | sed 's|https://||; s|http://||')
           docker login -u ${{ github.actor }} -p ${{ secrets.FORGEJO_TOKEN }} $REGISTRY
-          docker buildx build --platform ${{ env.BUILDX_PLATFORMS }} \
+          docker buildx build --builder multiarch-builder --platform ${{ env.BUILDX_PLATFORMS }} \
             -t $REGISTRY/${{ github.repository }}:latest \
             -t $REGISTRY/${{ github.repository }}:${{ steps.meta.outputs.tag }} \
             --push .
