@@ -22,9 +22,36 @@ RUN echo '#!/bin/bash' > /entrypoint.sh && \
     echo '' >> /entrypoint.sh && \
     echo '# Setup Docker Buildx with multiarch support' >> /entrypoint.sh && \
     echo 'if [ -S /var/run/docker.sock ]; then' >> /entrypoint.sh && \
-    echo '  echo "Setting up buildx builder..."' >> /entrypoint.sh && \
-    echo '  docker buildx create --use --name multiarch-builder --driver docker-container --driver-opt image=moby/buildkit:latest --driver-opt network=host 2>/dev/null || docker buildx use multiarch-builder 2>/dev/null || true' >> /entrypoint.sh && \
-    echo '  echo "Builder setup complete"' >> /entrypoint.sh && \
+    echo '  echo "Checking Docker Buildx setup..."' >> /entrypoint.sh && \
+    echo '  ' >> /entrypoint.sh && \
+    echo '  # Check if builder exists and is running' >> /entrypoint.sh && \
+    echo '  if ! docker buildx inspect multiarch-builder >/dev/null 2>&1; then' >> /entrypoint.sh && \
+    echo '    echo "Creating multiarch-builder..."' >> /entrypoint.sh && \
+    echo '    docker buildx create \' >> /entrypoint.sh && \
+    echo '      --name multiarch-builder \' >> /entrypoint.sh && \
+    echo '      --driver docker-container \' >> /entrypoint.sh && \
+    echo '      --driver-opt image=moby/buildkit:latest \' >> /entrypoint.sh && \
+    echo '      --driver-opt network=host \' >> /entrypoint.sh && \
+    echo '      --bootstrap \' >> /entrypoint.sh && \
+    echo '      --use' >> /entrypoint.sh && \
+    echo '  else' >> /entrypoint.sh && \
+    echo '    echo "Builder exists, ensuring it is active..."' >> /entrypoint.sh && \
+    echo '    docker buildx use multiarch-builder' >> /entrypoint.sh && \
+    echo '    # Check if builder container is running, restart if needed' >> /entrypoint.sh && \
+    echo '    if ! docker buildx inspect multiarch-builder --bootstrap >/dev/null 2>&1; then' >> /entrypoint.sh && \
+    echo '      echo "Builder not running, recreating..."' >> /entrypoint.sh && \
+    echo '      docker buildx rm multiarch-builder 2>/dev/null || true' >> /entrypoint.sh && \
+    echo '      docker buildx create \' >> /entrypoint.sh && \
+    echo '        --name multiarch-builder \' >> /entrypoint.sh && \
+    echo '        --driver docker-container \' >> /entrypoint.sh && \
+    echo '        --driver-opt image=moby/buildkit:latest \' >> /entrypoint.sh && \
+    echo '        --driver-opt network=host \' >> /entrypoint.sh && \
+    echo '        --bootstrap \' >> /entrypoint.sh && \
+    echo '        --use' >> /entrypoint.sh && \
+    echo '    fi' >> /entrypoint.sh && \
+    echo '  fi' >> /entrypoint.sh && \
+    echo '  ' >> /entrypoint.sh && \
+    echo '  echo "Current buildx configuration:"' >> /entrypoint.sh && \
     echo '  docker buildx ls' >> /entrypoint.sh && \
     echo 'fi' >> /entrypoint.sh && \
     echo '' >> /entrypoint.sh && \
