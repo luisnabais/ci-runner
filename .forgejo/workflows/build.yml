@@ -1,0 +1,78 @@
+name: Build and Push Container
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'VERSION'
+    tags:
+      - '*'
+  workflow_dispatch:
+
+env:
+  BUILDX_PLATFORMS: "linux/amd64,linux/arm64/v8"
+
+jobs:
+  auto-tag:
+    runs-on: buildx
+    if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.modified, 'VERSION')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.PUSH_TOKEN }}
+
+      - name: Create and push tag
+        run: |
+          VERSION=$(cat VERSION)
+          echo "Version: $VERSION"
+          if git rev-parse "$VERSION" >/dev/null 2>&1; then
+            echo "Tag $VERSION already exists, workflow won't create a new tag."
+            exit 0
+          fi
+          git config --global user.email "ci@example.com"
+          git config --global user.name "CI Bot"
+          git tag "$VERSION"
+          git push origin "$VERSION"
+
+  container-build:
+    runs-on: buildx
+    container:
+      image: registry.gitlab.com/luisnabais/ci-runner:latest
+      options: --privileged -v /var/run/docker.sock:/var/run/docker.sock -v /data/exthd/cloud/forgejo_runner_data/.ssh:/root/.ssh:ro
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout code
+        run: |
+          git clone ${{ github.server_url }}/${{ github.repository }} .
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG=${GITHUB_REF#refs/tags/}
+            git checkout $TAG
+          else
+            git checkout main
+          fi
+
+      - name: Extract metadata
+        id: meta
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG=${GITHUB_REF#refs/tags/}
+          else
+            TAG=$(cat VERSION)
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        run: |
+          docker buildx create --use --name multiarch-builder --driver docker-container 2>/dev/null || docker buildx use multiarch-builder
+
+      - name: Build and push with Docker
+        run: |
+          REGISTRY=$(echo "${{ github.server_url }}" | sed 's|https://||; s|http://||')
+          docker login -u ${{ github.actor }} -p ${{ secrets.FORGEJO_TOKEN }} $REGISTRY
+          docker buildx build --platform ${{ env.BUILDX_PLATFORMS }} \
+            -t $REGISTRY/${{ github.repository }}:latest \
+            -t $REGISTRY/${{ github.repository }}:${{ steps.meta.outputs.tag }} \
+            --push .
